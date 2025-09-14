@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.scene.text.Font?>
+
+<VBox xmlns="http://javafx.com/javafx/11.0.2" xmlns:fx="http://javafx.com/fxml/1" fx:controller="com.yourname.mmoitemseditor.EditorController" prefHeight="750.0" prefWidth="1200.0">
+   <children>
+      <HBox alignment="CENTER_LEFT" spacing="10.0" style="-fx-padding: 10;">
+         <children>
+            <Button onAction="#loadDirectory" text="选择 MMOItems/item 文件夹" />
+            <Label fx:id="statusLabel" style="-fx-font-weight: bold;" text="请选择文件夹..." />
+         </children>
+      </HBox>
+      <SplitPane dividerPositions="0.25" VBox.vgrow="ALWAYS">
+         <items>
+            <VBox spacing="5.0" style="-fx-padding: 5;">
+               <children>
+                  <Label style="-fx-font-weight: bold;" text="物品文件/ID列表" />
+                  <TreeView fx:id="fileTreeView" VBox.vgrow="ALWAYS" />
+               </children>
+            </VBox>
+            <StackPane>
+               <children>
+                  <VBox fx:id="welcomePane" alignment="CENTER" spacing="10.0">
+                     <children>
+                        <Label text="欢迎使用 MMOItems 编辑器">
+                           <font>
+                              <Font size="24.0" />
+                           </font>
+                        </Label>
+                        <Label text="请先点击左上角的“选择文件夹”按钮加载您的物品配置目录。" />
+                        <Label text="加载后，在左侧列表中选择一个物品以开始编辑。" />
+                     </children>
+                  </VBox>
+                  <VBox fx:id="editorPane" spacing="10.0" style="-fx-padding: 10;" visible="false">
+                     <children>
+                        <HBox alignment="CENTER_LEFT" spacing="10.0">
+                           <children>
+                              <Label text="正在编辑物品 ID: " />
+                              <Label fx:id="editingItemIdLabel" style="-fx-font-weight: bold; -fx-text-fill: #0066cc;" />
+                           </children>
+                        </HBox>
+                        <TabPane fx:id="attributeTabPane" tabClosingPolicy="UNAVAILABLE" VBox.vgrow="ALWAYS">
+                           <tabs>
+                              <Tab text="基础属性">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <GridPane fx:id="basicAttributesPane" hgap="10" vgap="10">
+                                             <columnConstraints>
+                                                <ColumnConstraints hgrow="NEVER" minWidth="10.0" />
+                                                <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" />
+                                             </columnConstraints>
+                                          </GridPane>
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+							  <Tab text="Lore &amp; 附魔">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <VBox fx:id="loreEnchantsPane" spacing="15.0" />
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="核心数值">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <GridPane fx:id="statsAttributesPane" hgap="10" vgap="10">
+                                            <columnConstraints>
+                                              <ColumnConstraints hgrow="NEVER" minWidth="10.0" />
+                                              <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" />
+                                            </columnConstraints>
+                                          </GridPane>
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="特殊属性">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <GridPane fx:id="advancedAttributesPane" hgap="10" vgap="10">
+                                            <columnConstraints>
+                                              <ColumnConstraints hgrow="NEVER" minWidth="10.0" />
+                                              <ColumnConstraints hgrow="ALWAYS" minWidth="10.0" />
+                                            </columnConstraints>
+                                          </GridPane>
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="Lore &amp; 附魔">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <VBox fx:id="loreEnchantsPane" spacing="10" />
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+                              <Tab text="复杂属性 (YAML)">
+                                 <content>
+                                    <ScrollPane fitToWidth="true" style="-fx-padding: 10;">
+                                       <content>
+                                          <VBox fx:id="complexAttributesPane" spacing="10" />
+                                       </content>
+                                    </ScrollPane>
+                                 </content>
+                              </Tab>
+                           </tabs>
+                        </TabPane>
+                        <HBox alignment="CENTER_RIGHT" spacing="10.0">
+                           <children>
+                              <Button fx:id="newItemButton" disable="true" onAction="#handleNewItem" text="新建物品" />
+                              <Button fx:id="duplicateItemButton" disable="true" onAction="#handleDuplicateItem" text="复制物品" />
+                              <Button fx:id="deleteItemButton" disable="true" onAction="#handleDeleteItem" text="删除物品" />
+                              <Button fx:id="saveChangesButton" disable="true" onAction="#saveChanges" style="-fx-font-weight: bold; -fx-base: #4CAF50;" text="保存修改" />
+                           </children>
+                        </HBox>
+                     </children>
+                  </VBox>
+               </children>
+            </StackPane>
+         </items>
+      </SplitPane>
+   </children>
+</VBox>
