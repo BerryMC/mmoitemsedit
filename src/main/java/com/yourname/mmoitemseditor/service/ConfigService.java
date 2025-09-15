@@ -36,8 +36,9 @@ public class ConfigService {
     }
 
     private void loadConfigList(String listName) throws DataAccessException {
-        String resourcePath = String.format("/configs/%s/%s.txt", currentVersion, listName);
-        try (InputStream is = ConfigService.class.getResourceAsStream(resourcePath)) {
+        String versionPath = currentVersion.replace('.', '_'); // Convert "1.12.2" to "1_12_2"
+        String resourcePath = String.format("configs/%s/%s.txt", versionPath, listName);
+        try (InputStream is = Thread.currentThread().getContextClassLoader().getResourceAsStream(resourcePath)) { // Used Thread.currentThread().getContextClassLoader()
             if (is == null) {
                 throw new DataAccessException("Resource not found: " + resourcePath, null);
             }
