@@ -9,32 +9,42 @@ import javafx.stage.WindowEvent;
 
 import java.io.IOException;
 import java.net.URL;
+import java.util.Locale;
+import java.util.ResourceBundle;
 
 public class Main extends Application {
 
+    private static Stage primaryStage;
+
     @Override
-    public void start(Stage primaryStage) throws IOException {
-        URL fxmlLocation = getClass().getResource("Editor.fxml");
+    public void start(Stage stage) throws IOException {
+        primaryStage = stage;
+        // Load the FXML file with the default locale's resource bundle.
+        loadScene(Locale.getDefault());
+    }
+
+    public static void loadScene(Locale locale) throws IOException {
+        URL fxmlLocation = Main.class.getResource("Editor.fxml");
         if (fxmlLocation == null) {
-            System.err.println("错误: 找不到 FXML 文件 'Editor.fxml'");
+            System.err.println("Error: FXML file 'Editor.fxml' not found.");
             return;
         }
 
-        // 获取加载器和控制器实例，以便在关闭时调用控制器的方法
-        FXMLLoader loader = new FXMLLoader(fxmlLocation);
+        ResourceBundle bundle = ResourceBundle.getBundle("com.yourname.mmoitemseditor.messages", locale);
+        FXMLLoader loader = new FXMLLoader(fxmlLocation, bundle);
         Parent root = loader.load();
         EditorController controller = loader.getController();
 
-        // 将Stage实例传递给控制器，以便控制器可以修改窗口标题
+        // Pass the Stage instance to the controller
         controller.setStage(primaryStage);
+        controller.setMainApp(Main.class);
 
-        primaryStage.setTitle("MMOItems Editor");
+        primaryStage.setTitle(bundle.getString("app.title"));
         primaryStage.setScene(new Scene(root, 1200, 750));
-        
-        // 设置关闭请求的处理器
+
+        // Set the close request handler
         primaryStage.setOnCloseRequest((WindowEvent event) -> {
             if (!controller.canClose()) {
-                // 如果控制器说不能关闭 (因为用户取消了保存)，则消费掉这个关闭事件
                 event.consume();
             }
         });

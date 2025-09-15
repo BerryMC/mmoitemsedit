@@ -1,32 +1,43 @@
 package com.yourname.mmoitemseditor;
 
+import com.yourname.mmoitemseditor.model.AbilityEntry;
 import com.yourname.mmoitemseditor.model.EnchantmentEntry;
 import com.yourname.mmoitemseditor.model.MMOItemEntry;
+import com.yourname.mmoitemseditor.model.PotionEffectEntry;
+import com.yourname.mmoitemseditor.service.ConfigService;
+import com.yourname.mmoitemseditor.service.DataAccessException;
+import com.yourname.mmoitemseditor.service.FileIOService;
+import com.yourname.mmoitemseditor.service.YAMLDataService;
+import com.yourname.mmoitemseditor.util.Utils;
+import com.yourname.mmoitemseditor.view.builder.AttributePaneBuilder;
+import com.yourname.mmoitemseditor.view.builder.TreeViewBuilder;
+import com.yourname.mmoitemseditor.view.dialog.AbilityEditorDialog;
+import com.yourname.mmoitemseditor.view.dialog.AddEntryDialog;
+import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.collections.FXCollections;
+import javafx.concurrent.Task;
 import javafx.fxml.FXML;
-import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.GridPane;
-import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 import javafx.util.Pair;
-import org.yaml.snakeyaml.DumperOptions;
-import org.yaml.snakeyaml.Yaml;
 
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.util.*;
 
 public class EditorController {
 
     //<editor-fold desc="FXML Declarations">
+    @FXML private MenuBar menuBar;
+    @FXML private ComboBox<String> versionComboBox;
+    @FXML private TextField searchField;
     @FXML private TreeView<Object> fileTreeView;
     @FXML private Label statusLabel;
     @FXML private Label editingItemIdLabel;
@@ -41,147 +52,26 @@ public class EditorController {
     @FXML private Button duplicateItemButton;
     @FXML private Button deleteItemButton;
     @FXML private Button saveChangesButton;
-    //</editor-fold>
+    @FXML private TableView<PotionEffectEntry> permEffectsTable;
+    @FXML private TableColumn<PotionEffectEntry, String> permEffectNameCol;
+    @FXML private TableColumn<PotionEffectEntry, Integer> permEffectLevelCol;
+    @FXML private Button addEnchantButton;
+    @FXML private Button removeEnchantButton;
+    @FXML private Button addAbilityButton;
+    @FXML private Button editAbilityButton;
+    @FXML private Button removeAbilityButton;
 
-    //<editor-fold desc="Minecraft 1.12.2 Data & Translations">
-    private static final Map<String, String> TRANSLATIONS = new HashMap<>();
-    private static final List<String> MC_1_12_2_MATERIALS;
-    private static final List<String> MC_1_12_2_ENCHANTMENTS;
-    private static final List<String> BASIC_ATTRIBUTES = Arrays.asList("material", "name", "tier");
-    private static final List<String> STATS_ATTRIBUTES = Arrays.asList("attack-damage", "attack-speed", "critical-strike-chance", "critical-strike-power", "max-health", "health-regeneration", "armor", "armor-toughness", "movement-speed", "knockback-resistance", "pve-damage", "pvp-damage", "magic-damage", "skill-damage", "damage-reduction", "fall-damage-reduction", "required-level", "required-class");
-    private static final List<String> ADVANCED_ATTRIBUTES_BOOLEAN = Arrays.asList("unbreakable", "two-handed", "hide-enchants", "disable-interaction", "disable-repairing", "disable-enchanting", "disable-crafting", "disable-smelting", "can-identify", "can-deconstruct");
-    private static final List<String> ADVANCED_ATTRIBUTES_TEXT = Arrays.asList("max-durability", "consume-cooldown", "gem-sockets", "soulbound-level", "soulbinding-chance", "soulbound-break-chance", "potion-color", "skull-texture");
-    private static final String LORE_ATTRIBUTE = "lore";
-    private static final List<String> COMPLEX_ATTRIBUTES = Arrays.asList("ability", "perm-effects", "effects", "restore", "element", "craft", "advanced-craft", "shield-pattern", "commands");
-
-    static {
-        TRANSLATIONS.put("material", "材质");
-        TRANSLATIONS.put("name", "名称");
-        TRANSLATIONS.put("tier", "阶级");
-        TRANSLATIONS.put("attack-damage", "攻击伤害");
-        TRANSLATIONS.put("attack-speed", "攻击速度");
-        TRANSLATIONS.put("critical-strike-chance", "暴击几率");
-        TRANSLATIONS.put("critical-strike-power", "暴击伤害");
-        TRANSLATIONS.put("max-health", "最大生命值");
-        TRANSLATIONS.put("health-regeneration", "生命恢复");
-        TRANSLATIONS.put("armor", "护甲");
-        TRANSLATIONS.put("armor-toughness", "护甲韧性");
-        TRANSLATIONS.put("movement-speed", "移动速度");
-        TRANSLATIONS.put("knockback-resistance", "击退抗性");
-        TRANSLATIONS.put("pve-damage", "PvE 伤害 (%)");
-        TRANSLATIONS.put("pvp-damage", "PvP 伤害 (%)");
-        TRANSLATIONS.put("magic-damage", "魔法伤害");
-        TRANSLATIONS.put("skill-damage", "技能伤害 (%)");
-        TRANSLATIONS.put("damage-reduction", "伤害减免 (%)");
-        TRANSLATIONS.put("fall-damage-reduction", "掉落伤害减免 (%)");
-        TRANSLATIONS.put("required-level", "需要等级");
-        TRANSLATIONS.put("required-class", "需要职业");
-        TRANSLATIONS.put("max-durability", "最大耐久");
-        TRANSLATIONS.put("consume-cooldown", "消耗冷却(秒)");
-        TRANSLATIONS.put("gem-sockets", "宝石插槽");
-        TRANSLATIONS.put("soulbound-level", "灵魂绑定等级");
-        TRANSLATIONS.put("soulbinding-chance", "灵魂绑定几率");
-        TRANSLATIONS.put("soulbound-break-chance", "灵魂绑定破坏几率");
-        TRANSLATIONS.put("potion-color", "药水颜色(RGB)");
-        TRANSLATIONS.put("skull-texture", "头颅材质(Base64)");
-        TRANSLATIONS.put("unbreakable", "无法破坏");
-        TRANSLATIONS.put("two-handed", "双手持有");
-        TRANSLATIONS.put("hide-enchants", "隐藏附魔");
-        TRANSLATIONS.put("disable-interaction", "禁用交互");
-        TRANSLATIONS.put("disable-repairing", "禁用修复");
-        TRANSLATIONS.put("disable-enchanting", "禁用附魔");
-        TRANSLATIONS.put("disable-crafting", "禁用合成");
-        TRANSLATIONS.put("disable-smelting", "禁用熔炼");
-        TRANSLATIONS.put("can-identify", "可鉴定");
-        TRANSLATIONS.put("can-deconstruct", "可分解");
-        TRANSLATIONS.put("lore", "描述 (Lore)");
-        TRANSLATIONS.put("enchants", "附魔");
-        TRANSLATIONS.put("ability", "技能");
-        TRANSLATIONS.put("perm-effects", "永久药水效果");
-        TRANSLATIONS.put("effects", "命中/消耗效果");
-        TRANSLATIONS.put("restore", "恢复属性");
-        TRANSLATIONS.put("element", "元素");
-        TRANSLATIONS.put("craft", "原版合成配方");
-        TRANSLATIONS.put("advanced-craft", "高级合成配方");
-        TRANSLATIONS.put("shield-pattern", "盾牌图案");
-        TRANSLATIONS.put("commands", "执行指令");
-
-        MC_1_12_2_MATERIALS = Arrays.asList(
-            "STONE", "GRASS", "DIRT", "COBBLESTONE", "WOOD", "SAPLING", "BEDROCK", "WATER", "LAVA", "SAND", "GRAVEL", "GOLD_ORE",
-            "IRON_ORE", "COAL_ORE", "LOG", "LEAVES", "SPONGE", "GLASS", "LAPIS_ORE", "LAPIS_BLOCK", "DISPENSER", "SANDSTONE",
-            "NOTE_BLOCK", "BED", "POWERED_RAIL", "DETECTOR_RAIL", "STICKY_PISTON", "WEB", "LONG_GRASS", "DEAD_BUSH", "PISTON_BASE",
-            "WOOL", "YELLOW_FLOWER", "RED_ROSE", "BROWN_MUSHROOM", "RED_MUSHROOM", "GOLD_BLOCK", "IRON_BLOCK", "DOUBLE_STEP",
-            "STEP", "BRICK", "TNT", "BOOKSHELF", "MOSSY_COBBLESTONE", "OBSIDIAN", "TORCH", "FIRE", "MOB_SPAWNER", "WOOD_STAIRS",
-            "CHEST", "DIAMOND_ORE", "DIAMOND_BLOCK", "WORKBENCH", "CROPS", "SOIL", "FURNACE", "SIGN_POST", "WOODEN_DOOR", "LADDER",
-            "RAILS", "COBBLESTONE_STAIRS", "WALL_SIGN", "LEVER", "STONE_PLATE", "IRON_DOOR_BLOCK", "WOOD_PLATE", "REDSTONE_ORE",
-            "REDSTONE_TORCH_ON", "STONE_BUTTON", "SNOW", "ICE", "SNOW_BLOCK", "CACTUS", "CLAY", "SUGAR_CANE_BLOCK", "JUKEBOX",
-            "FENCE", "PUMPKIN", "NETHERRACK", "SOUL_SAND", "GLOWSTONE", "PORTAL", "JACK_O_LANTERN", "CAKE_BLOCK", "DIODE_BLOCK_OFF",
-            "STAINED_GLASS", "TRAP_DOOR", "MONSTER_EGG", "SMOOTH_BRICK", "HUGE_MUSHROOM_1", "HUGE_MUSHROOM_2", "IRON_FENCE",
-            "THIN_GLASS", "MELON_BLOCK", "PUMPKIN_STEM", "MELON_STEM", "VINE", "FENCE_GATE", "BRICK_STAIRS", "SMOOTH_STAIRS",
-            "MYCEL", "WATER_LILY", "NETHER_BRICK", "NETHER_FENCE", "NETHER_BRICK_STAIRS", "NETHER_WARTS", "ENCHANTMENT_TABLE",
-            "BREWING_STAND", "CAULDRON", "ENDER_PORTAL", "ENDER_PORTAL_FRAME", "ENDER_STONE", "DRAGON_EGG", "REDSTONE_LAMP_OFF",
-            "WOOD_DOUBLE_STEP", "WOOD_STEP", "COCOA", "SANDSTONE_STAIRS", "EMERALD_ORE", "ENDER_CHEST", "TRIPWIRE_HOOK", "TRIPWIRE",
-            "EMERALD_BLOCK", "SPRUCE_WOOD_STAIRS", "BIRCH_WOOD_STAIRS", "JUNGLE_WOOD_STAIRS", "COMMAND", "BEACON", "COBBLE_WALL",
-            "FLOWER_POT", "CARROT", "POTATO", "WOOD_BUTTON", "SKULL", "ANVIL", "TRAPPED_CHEST", "GOLD_PLATE", "IRON_PLATE",
-            "REDSTONE_COMPARATOR_OFF", "DAYLIGHT_DETECTOR", "REDSTONE_BLOCK", "QUARTZ_ORE", "HOPPER", "QUARTZ_BLOCK", "QUARTZ_STAIRS",
-            "ACTIVATOR_RAIL", "DROPPER", "STAINed_CLAY", "STAINED_GLASS_PANE", "LEAVES_2", "LOG_2", "ACACIA_STAIRS", "DARK_OAK_STAIRS",
-            "SLIME_BLOCK", "BARRIER", "IRON_TRAPDOOR", "PRISMARINE", "SEA_LANTERN", "HAY_BLOCK", "CARPET", "HARD_CLAY", "COAL_BLOCK",
-            "PACKED_ICE", "DOUBLE_PLANT", "STANDING_BANNER", "WALL_BANNER", "DAYLIGHT_DETECTOR_INVERTED", "RED_SANDSTONE",
-            "RED_SANDSTONE_STAIRS", "DOUBLE_STONE_SLAB2", "STONE_SLAB2", "SPRUCE_FENCE_GATE", "BIRCH_FENCE_GATE", "JUNGLE_FENCE_GATE",
-            "DARK_OAK_FENCE_GATE", "ACACIA_FENCE_GATE", "SPRUCE_FENCE", "BIRCH_FENCE", "JUNGLE_FENCE", "DARK_OAK_FENCE", "ACACIA_FENCE",
-            "END_ROD", "CHORUS_PLANT", "CHORUS_FLOWER", "PURPUR_BLOCK", "PURPUR_PILLAR", "PURPUR_STAIRS", "PURPUR_DOUBLE_SLAB",
-            "PURPUR_SLAB", "END_BRICKS", "BEETROOT_BLOCK", "GRASS_PATH", "END_GATEWAY", "COMMAND_REPEATING", "COMMAND_CHAIN",
-            "FROSTED_ICE", "MAGMA", "NETHER_WART_BLOCK", "RED_NETHER_BRICK", "BONE_BLOCK", "STRUCTURE_VOID", "OBSERVER",
-            "WHITE_SHULKER_BOX", "ORANGE_SHULKER_BOX", "MAGENTA_SHULKER_BOX", "LIGHT_BLUE_SHULKER_BOX", "YELLOW_SHULKER_BOX",
-            "LIME_SHULKER_BOX", "PINK_SHULKER_BOX", "GRAY_SHULKER_BOX", "SILVER_SHULKER_BOX", "CYAN_SHULKER_BOX", "PURPLE_SHULKER_BOX",
-            "BLUE_SHULKER_BOX", "BROWN_SHULKER_BOX", "GREEN_SHULKER_BOX", "RED_SHULKER_BOX", "BLACK_SHULKER_BOX",
-            "CONCRETE", "CONCRETE_POWDER", "STRUCTURE_BLOCK",
-            "IRON_SPADE", "IRON_PICKAXE", "IRON_AXE", "FLINT_AND_STEEL", "APPLE", "BOW", "ARROW", "COAL", "DIAMOND", "IRON_INGOT",
-            "GOLD_INGOT", "IRON_SWORD", "WOOD_SWORD", "WOOD_SPADE", "WOOD_PICKAXE", "WOOD_AXE", "STONE_SWORD", "STONE_SPADE",
-            "STONE_PICKAXE", "STONE_AXE", "DIAMOND_SWORD", "DIAMOND_SPADE", "DIAMOND_PICKAXE", "DIAMOND_AXE", "STICK", "BOWL",
-            "MUSHROOM_SOUP", "GOLD_SWORD", "GOLD_SPADE", "GOLD_PICKAXE", "GOLD_AXE", "STRING", "FEATHER", "SULPHUR", "WOOD_HOE",
-            "STONE_HOE", "IRON_HOE", "DIAMOND_HOE", "GOLD_HOE", "SEEDS", "WHEAT", "BREAD", "LEATHER_HELMET", "LEATHER_CHESTPLATE",
-            "LEATHER_LEGGINGS", "LEATHER_BOOTS", "CHAINMAIL_HELMET", "CHAINMAIL_CHESTPLATE", "CHAINMAIL_LEGGINGS", "CHAINMAIL_BOOTS",
-            "IRON_HELMET", "IRON_CHESTPLATE", "IRON_LEGGINGS", "IRON_BOOTS", "DIAMOND_HELMET", "DIAMOND_CHESTPLATE",
-            "DIAMOND_LEGGINGS", "DIAMOND_BOOTS", "GOLD_HELMET", "GOLD_CHESTPLATE", "GOLD_LEGGINGS", "GOLD_BOOTS", "FLINT", "PORK",
-            "GRILLED_PORK", "PAINTING", "GOLDEN_APPLE", "SIGN", "WOOD_DOOR", "BUCKET", "WATER_BUCKET", "LAVA_BUCKET", "MINECART",
-            "SADDLE", "IRON_DOOR", "REDSTONE", "SNOW_BALL", "BOAT", "LEATHER", "MILK_BUCKET", "CLAY_BRICK", "CLAY_BALL", "SUGAR_CANE",
-            "PAPER", "BOOK", "SLIME_BALL", "STORAGE_MINECART", "POWERED_MINECART", "EGG", "COMPASS", "FISHING_ROD", "WATCH",
-            "GLOWSTONE_DUST", "RAW_FISH", "COOKED_FISH", "INK_SACK", "BONE", "SUGAR", "CAKE", "BED", "DIODE", "COOKIE", "MAP",
-            "SHEARS", "MELON", "PUMPKIN_SEEDS", "MELON_SEEDS", "RAW_BEEF", "COOKED_BEEF", "RAW_CHICKEN", "COOKED_CHICKEN",
-            "ROTTEN_FLESH", "ENDER_PEARL", "BLAZE_ROD", "GHAST_TEAR", "GOLD_NUGGET", "NETHER_STALK", "POTION", "GLASS_BOTTLE",
-            "SPIDER_EYE", "FERMENTED_SPIDER_EYE", "BLAZE_POWDER", "MAGMA_CREAM", "BREWING_STAND", "CAULDRON", "EYE_OF_ENDER",
-            "SPECKLED_MELON", "MONSTER_EGG", "EXP_BOTTLE", "FIREBALL", "BOOK_AND_QUILL", "WRITTEN_BOOK", "EMERALD", "ITEM_FRAME",
-            "FLOWER_POT", "CARROT_ITEM", "POTATO_ITEM", "BAKED_POTATO", "POISONOUS_POTATO", "EMPTY_MAP", "GOLDEN_CARROT", "SKULL_ITEM",
-            "CARROT_STICK", "NETHER_STAR", "PUMPKIN_PIE", "FIREWORK", "FIREWORK_CHARGE", "ENCHANTED_BOOK", "REDSTONE_COMPARATOR",
-            "NETHER_BRICK_ITEM", "QUARTZ", "EXPLOSIVE_MINECART", "HOPPER_MINECART", "PRISMARINE_SHARD", "PRISMARINE_CRYSTALS", "RABBIT",
-            "COOKED_RABBIT", "RABBIT_STEW", "RABBIT_FOOT", "RABBIT_HIDE", "ARMOR_STAND", "IRON_BARDING", "GOLD_BARDING", "DIAMOND_BARDING",
-            "LEASH", "NAME_TAG", "COMMAND_MINECART", "MUTTON", "COOKED_MUTTON", "BANNER", "END_CRYSTAL", "SPRUCE_DOOR_ITEM",
-            "BIRCH_DOOR_ITEM", "JUNGLE_DOOR_ITEM", "ACACIA_DOOR_ITEM", "DARK_OAK_DOOR_ITEM", "CHORUS_FRUIT", "CHORUS_FRUIT_POPPED",
-            "BEETROOT", "BEETROOT_SEEDS", "BEETROOT_SOUP", "DRAGONS_BREATH", "SPLASH_POTION", "SPECTRAL_ARROW", "TIPPED_ARROW",
-            "LINGERING_POTION", "SHIELD", "ELYTRA", "BOAT_SPRUCE", "BOAT_BIRCH", "BOAT_JUNGLE", "BOAT_ACACIA", "BOAT_DARK_OAK",
-            "TOTEM", "SHULKER_SHELL", "IRON_NUGGET", "KNOWLEDGE_BOOK",
-            "GOLD_RECORD", "GREEN_RECORD", "RECORD_3", "RECORD_4", "RECORD_5", "RECORD_6", "RECORD_7", "RECORD_8", "RECORD_9", "RECORD_10", "RECORD_11", "RECORD_12"
-        );
-
-        MC_1_12_2_ENCHANTMENTS = Arrays.asList(
-            "ARROW_DAMAGE", "ARROW_FIRE", "ARROW_INFINITE", "ARROW_KNOCKBACK", "DAMAGE_ALL", "DAMAGE_ARTHROPODS", "DAMAGE_UNDEAD",
-            "DEPTH_STRIDER", "DIG_SPEED", "DURABILITY", "FIRE_ASPECT", "FROST_WALKER", "KNOCKBACK", "LOOT_BONUS_BLOCKS",
-            "LOOT_BONUS_MOBS", "LUCK", "LURE", "MENDING", "OXYGEN", "PROTECTION_ENVIRONMENTAL", "PROTECTION_EXPLOSIONS",
-            "PROTECTION_FALL", "PROTECTION_FIRE", "PROTECTION_PROJECTILE", "SILK_TOUCH", "SWEEPING_EDGE", "THORNS",
-            "WATER_WORKER", "BINDING_CURSE", "VANISHING_CURSE"
-        );
-
-        Collections.sort(MC_1_12_2_MATERIALS);
-        Collections.sort(MC_1_12_2_ENCHANTMENTS);
-    }
+    private ResourceBundle translations;
     //</editor-fold>
 
     private final Map<String, Node> attributeControls = new HashMap<>();
-    private final Map<File, Map<String, Map<String, Object>>> loadedFilesData = new LinkedHashMap<>();
-    private final Yaml yaml;
+    private final YAMLDataService dataService;
+    private final ConfigService configService;
+    private final FileIOService fileIOService;
 
     private Stage stage;
+    private Class<Main> mainAppClass;
+    private TreeItem<Object> originalRoot;
     private boolean hasUnsavedChanges = false;
     private File selectedMMOItemsFolder;
     private File currentSelectedYmlFile;
@@ -190,122 +80,179 @@ public class EditorController {
     private final ChangeListener<Object> unsavedChangesListener = (obs, oldVal, newVal) -> setUnsavedChanges(true);
 
     public EditorController() {
-        DumperOptions options = new DumperOptions();
-        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-        options.setPrettyFlow(true);
-        options.setIndent(2);
-        options.setAllowUnicode(true);
-        this.yaml = new Yaml(options);
+        this.dataService = new YAMLDataService();
+        this.configService = new ConfigService();
+        this.fileIOService = new FileIOService(dataService);
     }
 
     @FXML
     private void initialize() {
+        this.translations = ResourceBundle.getBundle("com.yourname.mmoitemseditor.messages", Locale.getDefault());
+
         setupFileTreeView();
+        buildLanguageMenu();
+        setupVersionComboBox();
+
+        searchField.textProperty().addListener((obs, oldVal, newVal) -> filterTreeView(newVal));
         buildAttributeUI();
+        setupActionButtons();
         updateButtonsState();
         showEditor(false);
+
+        permEffectNameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
+        permEffectLevelCol.setCellValueFactory(new PropertyValueFactory<>("level"));
     }
 
     public void setStage(Stage stage) {
         this.stage = stage;
     }
 
+    public void setMainApp(Class<Main> mainAppClass) {
+        this.mainAppClass = mainAppClass;
+    }
+
     //<editor-fold desc="UI Building and Handlers">
-    private void buildAttributeUI() {
-        ComboBox<String> materialComboBox = new ComboBox<>(FXCollections.observableArrayList(MC_1_12_2_MATERIALS));
-        materialComboBox.setEditable(true);
-        addAttributeControl(basicAttributesPane, "material", materialComboBox, 0);
-        addAttributeControl(basicAttributesPane, "name", new TextField(), 1);
-        addAttributeControl(basicAttributesPane, "tier", new TextField(), 2);
 
-        int rowIndex = 0;
-        for (String attr : STATS_ATTRIBUTES) {
-            addAttributeControl(statsAttributesPane, attr, new TextField(), rowIndex++);
-        }
+    private void setupVersionComboBox() {
+        versionComboBox.setItems(FXCollections.observableArrayList("1.12.2"));
+        versionComboBox.setValue("1.12.2");
+        loadConfigForVersion("1.12.2");
 
-        rowIndex = 0;
-        for (String attr : ADVANCED_ATTRIBUTES_TEXT) {
-            addAttributeControl(advancedAttributesPane, attr, new TextField(), rowIndex++);
-        }
-        for (String attr : ADVANCED_ATTRIBUTES_BOOLEAN) {
-            addAttributeControl(advancedAttributesPane, attr, new CheckBox(), rowIndex++);
-        }
-
-        addComplexAttributeControl(loreEnchantsPane, "lore");
-
-        VBox enchantsBox = new VBox(5.0);
-        enchantsBox.getChildren().add(new Label(String.format("%s (%s):", getTranslation("enchants"), "enchants")));
-        TableView<EnchantmentEntry> enchantmentsTable = new TableView<>();
-        TableColumn<EnchantmentEntry, String> nameCol = new TableColumn<>("附魔 (Enchantment)");
-        nameCol.setCellValueFactory(new PropertyValueFactory<>("name"));
-        TableColumn<EnchantmentEntry, Integer> levelCol = new TableColumn<>("等级 (Level)");
-        levelCol.setCellValueFactory(new PropertyValueFactory<>("level"));
-        enchantmentsTable.getColumns().addAll(nameCol, levelCol);
-        enchantmentsTable.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        enchantsBox.getChildren().add(enchantmentsTable);
-
-        HBox enchantButtons = new HBox(5.0);
-        Button addEnchantButton = new Button("添加附魔");
-        addEnchantButton.setOnAction(e -> handleAddEnchantment(enchantmentsTable));
-        Button removeEnchantButton = new Button("移除选中");
-        removeEnchantButton.setOnAction(e -> {
-            EnchantmentEntry selected = enchantmentsTable.getSelectionModel().getSelectedItem();
-            if (selected != null) {
-                enchantmentsTable.getItems().remove(selected);
-                setUnsavedChanges(true);
+        versionComboBox.getSelectionModel().selectedItemProperty().addListener((obs, oldVersion, newVersion) -> {
+            if (newVersion != null && !newVersion.equals(oldVersion)) {
+                loadConfigForVersion(newVersion);
+                rebuildAttributeUI();
             }
         });
-        enchantButtons.getChildren().addAll(addEnchantButton, removeEnchantButton);
-        enchantsBox.getChildren().add(enchantButtons);
-        loreEnchantsPane.getChildren().add(enchantsBox);
-        attributeControls.put("enchants_table", enchantmentsTable);
+    }
 
-        for (String attr : COMPLEX_ATTRIBUTES) {
-            addComplexAttributeControl(complexAttributesPane, attr);
+    private void loadConfigForVersion(String version) {
+        try {
+            configService.loadVersion(version);
+        } catch (DataAccessException e) {
+            Platform.runLater(() -> {
+                showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.startup"), String.format(getTranslation("dialog.error.startup.message"), e.getMessage()));
+            });
         }
     }
 
-    private void handleAddEnchantment(TableView<EnchantmentEntry> table) {
-        Dialog<Pair<String, Integer>> dialog = new Dialog<>();
-        dialog.setTitle("添加附魔");
-        dialog.setHeaderText("选择一个附魔并指定其等级");
+    private void rebuildAttributeUI() {
+        attributeControls.clear();
+        basicAttributesPane.getChildren().clear();
+        statsAttributesPane.getChildren().clear();
+        advancedAttributesPane.getChildren().clear();
+        loreEnchantsPane.getChildren().clear();
+        complexAttributesPane.getChildren().clear();
 
-        ButtonType okButtonType = new ButtonType("确定", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
+        buildAttributeUI();
 
-        GridPane grid = new GridPane();
-        grid.setHgap(10);
-        grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
+        if (currentEditingItem != null) {
+            loadItemContent(currentEditingItem);
+        }
+    }
 
-        ComboBox<String> enchantmentComboBox = new ComboBox<>(FXCollections.observableArrayList(MC_1_12_2_ENCHANTMENTS));
-        enchantmentComboBox.setPromptText("选择附魔");
-        Spinner<Integer> levelSpinner = new Spinner<>(1, 255, 1);
-        levelSpinner.setEditable(true);
+    private void buildAttributeUI() {
+        AttributePaneBuilder builder = new AttributePaneBuilder(
+                configService, translations, attributeControls, unsavedChangesListener,
+                basicAttributesPane, statsAttributesPane, advancedAttributesPane,
+                loreEnchantsPane, complexAttributesPane
+        );
+        builder.build();
+    }
 
-        grid.add(new Label("附魔:"), 0, 0);
-        grid.add(enchantmentComboBox, 1, 0);
-        grid.add(new Label("等级:"), 0, 1);
-        grid.add(levelSpinner, 1, 1);
+    private void setupActionButtons() {
+        addEnchantButton.setOnAction(e -> handleAddEnchantment());
+        removeEnchantButton.setOnAction(e -> handleRemoveEnchantment());
+        addAbilityButton.setOnAction(e -> handleAddAbility());
+        editAbilityButton.setOnAction(e -> handleEditAbility());
+        removeAbilityButton.setOnAction(e -> handleRemoveAbility());
+    }
 
-        dialog.getDialogPane().setContent(grid);
+    private void buildLanguageMenu() {
+        Menu langMenu = new Menu(getTranslation("language"));
+        ToggleGroup langToggleGroup = new ToggleGroup();
 
-        Node okButton = dialog.getDialogPane().lookupButton(okButtonType);
-        okButton.setDisable(true);
-        enchantmentComboBox.valueProperty().addListener((obs, oldVal, newVal) -> okButton.setDisable(newVal == null || newVal.trim().isEmpty()));
+        RadioMenuItem enMenuItem = new RadioMenuItem("English");
+        enMenuItem.setToggleGroup(langToggleGroup);
+        enMenuItem.setSelected(Locale.getDefault().getLanguage().equals("en"));
+        enMenuItem.setOnAction(e -> switchLanguage(Locale.ENGLISH));
 
-        dialog.setResultConverter(dialogButton -> {
-            if (dialogButton == okButtonType) {
-                return new Pair<>(enchantmentComboBox.getValue(), levelSpinner.getValue());
+        RadioMenuItem zhMenuItem = new RadioMenuItem("中文");
+        zhMenuItem.setToggleGroup(langToggleGroup);
+        zhMenuItem.setSelected(Locale.getDefault().getLanguage().equals("zh"));
+        zhMenuItem.setOnAction(e -> switchLanguage(Locale.CHINESE));
+
+        langMenu.getItems().addAll(enMenuItem, zhMenuItem);
+        menuBar.getMenus().add(langMenu);
+    }
+
+    private void switchLanguage(Locale locale) {
+        if (mainAppClass != null) {
+            try {
+                Main.loadScene(locale);
+            } catch (IOException e) {
+                e.printStackTrace();
+                showAlert(Alert.AlertType.ERROR, "Error", "Could not reload the user interface for the new language.");
             }
-            return null;
-        });
+        }
+    }
 
-        Optional<Pair<String, Integer>> result = dialog.showAndWait();
-        result.ifPresent(pair -> {
+    @SuppressWarnings("unchecked")
+    private void handleAddAbility() {
+        TableView<AbilityEntry> table = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+        if (table == null) return;
+        new AbilityEditorDialog(null, configService, translations).showAndWait().ifPresent(newAbility -> {
+            table.getItems().add(newAbility);
+            setUnsavedChanges(true);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleEditAbility() {
+        TableView<AbilityEntry> table = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+        if (table == null) return;
+        AbilityEntry selected = table.getSelectionModel().getSelectedItem();
+        if (selected == null) {
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("information"), getTranslation("dialog.warn.ability.select"));
+            return;
+        }
+
+        new AbilityEditorDialog(selected, configService, translations).showAndWait().ifPresent(editedAbility -> {
+            editedAbility.updateSummary(); // Manually trigger summary update
+            table.refresh();
+            setUnsavedChanges(true);
+        });
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleRemoveAbility() {
+        TableView<AbilityEntry> table = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+        if (table == null) return;
+        AbilityEntry selected = table.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            table.getItems().remove(selected);
+            setUnsavedChanges(true);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void handleAddEnchantment() {
+        TableView<EnchantmentEntry> table = (TableView<EnchantmentEntry>) attributeControls.get("enchants_table");
+        if (table == null) return;
+
+        Dialog<Pair<String, Integer>> dialog = new AddEntryDialog(
+                getTranslation("dialog.add.enchant.title"),
+                getTranslation("dialog.add.enchant.header"),
+                getTranslation("dialog.add.enchant.prompt"),
+                getTranslation("label.enchantment"),
+                configService.getEnchantments(),
+                translations
+        );
+
+        dialog.showAndWait().ifPresent(pair -> {
             for (EnchantmentEntry entry : table.getItems()) {
                 if (entry.getName().equalsIgnoreCase(pair.getKey())) {
-                    showAlert("提示", "该附魔已存在。请先移除旧的条目再添加。");
+                    showAlert(Alert.AlertType.WARNING, getTranslation("warning"), getTranslation("dialog.warn.enchant.exists"));
                     return;
                 }
             }
@@ -314,28 +261,48 @@ public class EditorController {
         });
     }
 
-    private void addAttributeControl(GridPane pane, String attributeName, Node control, int rowIndex) {
-        String labelText = String.format("%s (%s):", getTranslation(attributeName), attributeName);
-        pane.add(new Label(labelText), 0, rowIndex);
-        pane.add(control, 1, rowIndex);
-        attributeControls.put(attributeName, control);
-        if (control instanceof TextInputControl) {
-            ((TextInputControl) control).textProperty().addListener(unsavedChangesListener);
-        } else if (control instanceof CheckBox) {
-            ((CheckBox) control).selectedProperty().addListener(unsavedChangesListener);
-        } else if (control instanceof ComboBox) {
-            ((ComboBox<?>) control).valueProperty().addListener(unsavedChangesListener);
+    @SuppressWarnings("unchecked")
+    private void handleRemoveEnchantment() {
+        TableView<EnchantmentEntry> table = (TableView<EnchantmentEntry>) attributeControls.get("enchants_table");
+        if (table == null) return;
+        EnchantmentEntry selected = table.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            table.getItems().remove(selected);
+            setUnsavedChanges(true);
         }
     }
 
-    private void addComplexAttributeControl(VBox pane, String attributeName) {
-        pane.getChildren().add(new Label(String.format("%s (%s):", getTranslation(attributeName), attributeName)));
-        TextArea textArea = new TextArea();
-        textArea.setPromptText("在此编辑 " + attributeName + " 的YAML内容...");
-        textArea.setPrefHeight(120);
-        textArea.textProperty().addListener(unsavedChangesListener);
-        pane.getChildren().add(textArea);
-        attributeControls.put(attributeName, textArea);
+
+    @FXML
+    private void handleAddPermEffect() {
+        Dialog<Pair<String, Integer>> dialog = new AddEntryDialog(
+                getTranslation("dialog.add.effect.title"),
+                getTranslation("dialog.add.effect.header"),
+                getTranslation("dialog.add.effect.prompt"),
+                getTranslation("label.effect"),
+                configService.getPotionEffects(),
+                translations
+        );
+
+        dialog.showAndWait().ifPresent(pair -> {
+            for (PotionEffectEntry entry : permEffectsTable.getItems()) {
+                if (entry.getName().equalsIgnoreCase(pair.getKey())) {
+                    showAlert(Alert.AlertType.WARNING, getTranslation("warning"), getTranslation("dialog.warn.effect.exists"));
+                    return;
+                }
+            }
+            permEffectsTable.getItems().add(new PotionEffectEntry(pair.getKey(), pair.getValue()));
+            setUnsavedChanges(true);
+        });
+    }
+
+    @FXML
+    private void handleRemovePermEffect() {
+        PotionEffectEntry selected = permEffectsTable.getSelectionModel().getSelectedItem();
+        if (selected != null) {
+            permEffectsTable.getItems().remove(selected);
+            setUnsavedChanges(true);
+        }
     }
 
     private void setupFileTreeView() {
@@ -354,8 +321,6 @@ public class EditorController {
     private void handleTreeSelection(TreeItem<Object> oldVal, TreeItem<Object> newVal) {
         if (hasUnsavedChanges) {
             if (!canClose()) {
-                 // Revert selection if user cancels.
-                 // Platform.runLater is needed to avoid issues with changing selection during a selection change event.
                  javafx.application.Platform.runLater(() -> fileTreeView.getSelectionModel().select(oldVal));
                 return;
             }
@@ -374,7 +339,7 @@ public class EditorController {
             currentSelectedYmlFile = (File) selectedValue;
             currentEditingItem = null;
             clearEditor();
-            editingItemIdLabel.setText("文件: " + currentSelectedYmlFile.getName());
+            editingItemIdLabel.setText(String.format(getTranslation("main.window.editing.file"), currentSelectedYmlFile.getName()));
             showEditor(true);
         } else if (selectedValue instanceof MMOItemEntry) {
             currentEditingItem = (MMOItemEntry) selectedValue;
@@ -391,6 +356,7 @@ public class EditorController {
     }
 
 
+    @SuppressWarnings("unchecked")
     private void clearEditor() {
         editingItemIdLabel.setText("");
         for (Node control : attributeControls.values()) {
@@ -400,9 +366,23 @@ public class EditorController {
                 ((CheckBox) control).setSelected(false);
             } else if (control instanceof ComboBox) {
                 ((ComboBox<?>) control).setValue(null);
+            } else if (control instanceof Spinner) {
+                Spinner<?> spinner = (Spinner<?>) control;
+                if (spinner.getValueFactory().getValue() instanceof Integer) {
+                    ((Spinner<Integer>)spinner).getValueFactory().setValue(0);
+                } else if (spinner.getValueFactory().getValue() instanceof Double) {
+                    ((Spinner<Double>)spinner).getValueFactory().setValue(0.0);
+                }
             } else if (control instanceof TableView) {
-                ((TableView<?>) control).getItems().clear();
+                if (!Objects.equals(control.getId(), "ability_table")) { // Don't clear the table itself
+                    ((TableView<?>) control).getItems().clear();
+                }
             }
+        }
+        permEffectsTable.getItems().clear();
+        TableView<AbilityEntry> abilityTable = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+        if (abilityTable != null) {
+            abilityTable.getItems().clear();
         }
         setUnsavedChanges(false);
     }
@@ -427,88 +407,83 @@ public class EditorController {
     @FXML
     private void loadDirectory() {
         DirectoryChooser directoryChooser = new DirectoryChooser();
-        directoryChooser.setTitle("选择 MMOItems 的 item 文件夹");
+        directoryChooser.setTitle(getTranslation("open.folder"));
         if (selectedMMOItemsFolder != null && selectedMMOItemsFolder.exists()) {
             directoryChooser.setInitialDirectory(selectedMMOItemsFolder);
         }
 
         File selectedDirectory = directoryChooser.showDialog(statusLabel.getScene().getWindow());
-        if (selectedDirectory != null) {
-            selectedMMOItemsFolder = selectedDirectory;
-            statusLabel.setText("已加载: " + selectedDirectory.getAbsolutePath());
-            clearEditor();
-            showEditor(false);
-            loadAllYmlFiles(selectedDirectory);
-
-            TreeItem<Object> rootItem = new TreeItem<>(selectedDirectory);
-            rootItem.setExpanded(true);
-            populateTreeView(selectedDirectory, rootItem);
-            fileTreeView.setRoot(rootItem);
+        if (selectedDirectory == null) {
+            return;
         }
+
+        selectedMMOItemsFolder = selectedDirectory;
+        clearEditor();
+        showEditor(false);
+        fileTreeView.setRoot(null); // Clear the tree view while loading
+
+        Task<TreeItem<Object>> loadTask = fileIOService.createLoadDirectoryTask(selectedDirectory);
+
+        // Bind status label to task's message
+        statusLabel.textProperty().bind(loadTask.messageProperty());
+        loadTask.messageProperty().addListener((obs, oldMsg, newMsg) -> statusLabel.setText(getTranslation(newMsg)));
+
+        // Disable UI elements that shouldn't be used during load
+        menuBar.setDisable(true);
+        fileTreeView.setDisable(true);
+        searchField.setDisable(true);
+
+        // Handle successful completion
+        loadTask.setOnSucceeded(event -> {
+            TreeItem<Object> rootItem = loadTask.getValue();
+            originalRoot = rootItem;
+            fileTreeView.setRoot(originalRoot);
+            searchField.clear();
+            statusLabel.textProperty().unbind();
+            statusLabel.setText(String.format(getTranslation("main.window.status.loaded"), selectedDirectory.getAbsolutePath()));
+            menuBar.setDisable(false);
+            fileTreeView.setDisable(false);
+            searchField.setDisable(false);
+            setUnsavedChanges(false);
+        });
+
+        // Handle failure
+        loadTask.setOnFailed(event -> {
+            Throwable e = loadTask.getException();
+            showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.load"), String.format(getTranslation("dialog.error.load.message"), e.getMessage()));
+            e.printStackTrace();
+            statusLabel.textProperty().unbind();
+            statusLabel.setText(getTranslation("main.window.status.load.failed"));
+            menuBar.setDisable(false);
+            fileTreeView.setDisable(false);
+            searchField.setDisable(false);
+        });
+
+        // Run the task on a new thread
+        new Thread(loadTask).start();
     }
 
-    private void loadAllYmlFiles(File dir) {
-        loadedFilesData.clear();
-        File[] files = dir.listFiles();
-        if (files == null) return;
+    @FXML
+    private void saveChanges() {
+        if (currentEditingItem == null) return;
 
-        for (File file : files) {
-            if (file.isDirectory()) {
-                loadAllYmlFiles(file);
-            } else if (file.getName().toLowerCase().endsWith(".yml")) {
-                try (FileReader reader = new FileReader(file)) {
-                    Object obj = yaml.load(reader);
-                    if (obj == null) {
-                        loadedFilesData.put(file, new LinkedHashMap<>());
-                        continue;
-                    }
-                    if (obj instanceof Map) {
-                        Map<String, Map<String, Object>> sanitizedMap = new LinkedHashMap<>();
-                        ((Map<?, ?>) obj).forEach((key, value) -> {
-                            if (key instanceof String && value instanceof Map) {
-                                sanitizedMap.put((String) key, (Map<String, Object>) value);
-                            }
-                        });
-                        loadedFilesData.put(file, sanitizedMap);
-                    } else {
-                        System.err.println("警告: 文件 " + file.getName() + " 的根节点不是Map，已忽略。");
-                    }
-                } catch (Exception e) {
-                    showAlert("加载错误", "无法读取文件 " + file.getName() + ": " + e.getMessage());
-                }
-            }
-        }
-    }
+        Map<String, Object> newItemData = collectItemDataFromControls();
 
-    private void populateTreeView(File dir, TreeItem<Object> parent) {
-        File[] files = dir.listFiles();
-        if (files == null) return;
-
-        Arrays.sort(files, Comparator.comparing(File::getName));
-
-        for (File file : files) {
-            if (file.isDirectory()) {
-                TreeItem<Object> item = new TreeItem<>(file);
-                parent.getChildren().add(item);
-                populateTreeView(file, item);
-            } else if (file.getName().toLowerCase().endsWith(".yml")) {
-                TreeItem<Object> fileItem = new TreeItem<>(file);
-                parent.getChildren().add(fileItem);
-                Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(file);
-                if (itemsInFile != null) {
-                    itemsInFile.keySet().stream().sorted().forEach(itemId -> {
-                        fileItem.getChildren().add(new TreeItem<>(new MMOItemEntry(itemId, file)));
-                    });
-                }
-            }
+        try {
+            fileIOService.saveItem(currentEditingItem, newItemData);
+            setUnsavedChanges(false);
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), String.format(getTranslation("dialog.success.save.item"), currentEditingItem.getItemId()));
+        } catch (DataAccessException e) {
+            showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.save"), String.format(getTranslation("dialog.error.save.item.message"), e.getMessage()));
+            e.printStackTrace();
         }
     }
 
     @SuppressWarnings("unchecked")
     private void loadItemContent(MMOItemEntry itemEntry) {
         clearEditor();
-        editingItemIdLabel.setText(itemEntry.getItemId() + " (文件: " + itemEntry.getParentFile().getName() + ")");
-        Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(itemEntry.getParentFile());
+        editingItemIdLabel.setText(itemEntry.getItemId() + " (" + String.format(getTranslation("main.window.editing.file"), itemEntry.getParentFile().getName()) + ")");
+        Map<String, Map<String, Object>> itemsInFile = dataService.getLoadedFilesData().get(itemEntry.getParentFile());
         if (itemsInFile != null) {
             Map<String, Object> itemData = itemsInFile.get(itemEntry.getItemId());
             if (itemData == null) return;
@@ -526,8 +501,18 @@ public class EditorController {
                     ((TextField) control).setText(value.toString());
                 } else if (control instanceof ComboBox) {
                     ((ComboBox<String>) control).setValue(value.toString());
+                } else if (control instanceof Spinner) {
+                    if (value instanceof Number) {
+                        if (((Spinner<?>) control).getValueFactory().getValue() instanceof Integer) {
+                            ((Spinner<Integer>) control).getValueFactory().setValue(((Number) value).intValue());
+                        } else {
+                            ((Spinner<Double>) control).getValueFactory().setValue(((Number) value).doubleValue());
+                        }
+                    }
                 } else if (control instanceof TextArea) {
-                    ((TextArea) control).setText(yaml.dump(value));
+                    if (!attrName.equals("perm-effects")) {
+                        ((TextArea) control).setText(dataService.getYaml().dump(value));
+                    }
                 }
             }
 
@@ -542,72 +527,175 @@ public class EditorController {
                     }
                 });
             }
+
+            permEffectsTable.getItems().clear();
+            Object permEffectsObj = itemData.get("perm-effects");
+            if (permEffectsObj instanceof Map) {
+                Map<String, Object> permEffectsMap = (Map<String, Object>) permEffectsObj;
+                permEffectsMap.forEach((name, level) -> {
+                    if (level instanceof Number) {
+                        permEffectsTable.getItems().add(new PotionEffectEntry(name, ((Number) level).intValue()));
+                    }
+                });
+            }
+
+            TableView<AbilityEntry> abilityTable = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+            abilityTable.getItems().clear();
+            Object abilityObj = itemData.get("ability");
+            if (abilityObj instanceof Map) {
+                Map<String, Object> abilityMap = (Map<String, Object>) abilityObj;
+                abilityMap.forEach((id, abilityData) -> {
+                    if (abilityData instanceof Map) {
+                        Map<String, Object> abilityDataMap = (Map<String, Object>) abilityData;
+                        String type = String.valueOf(abilityDataMap.getOrDefault("type", ""));
+                        String mode = String.valueOf(abilityDataMap.getOrDefault("mode", ""));
+                        abilityTable.getItems().add(new AbilityEntry(id, type, mode, abilityDataMap));
+                    }
+                });
+            }
         }
         setUnsavedChanges(false);
     }
 
     @FXML
-    private void saveChanges() {
-        if (currentEditingItem == null) return;
+    private void handleSaveAll() {
+        // First, ensure the currently edited item is saved to the in-memory model
+        if (currentEditingItem != null && hasUnsavedChanges) {
+            Map<String, Object> currentItemData = collectItemDataFromControls();
+            Map<String, Map<String, Object>> itemsInFile = dataService.getLoadedFilesData().get(currentEditingItem.getParentFile());
+            if (itemsInFile != null) {
+                itemsInFile.put(currentEditingItem.getItemId(), currentItemData);
+            }
+        }
 
-        Map<String, Object> newItemData = new LinkedHashMap<>();
+        try {
+            fileIOService.saveAll();
+            setUnsavedChanges(false);
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), getTranslation("dialog.success.save.all"));
+        } catch (DataAccessException e) {
+            showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.save"), String.format(getTranslation("dialog.error.save.all.message"), e.getMessage()));
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
+    private void handleSaveAs() {
+        if (currentEditingItem == null) {
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("information"), getTranslation("dialog.warn.no.item.selected"));
+            return;
+        }
+
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.setTitle(getTranslation("dialog.save.as.title"));
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("YAML Files", "*.yml"));
+        if (selectedMMOItemsFolder != null) {
+            fileChooser.setInitialDirectory(selectedMMOItemsFolder);
+        }
+        fileChooser.setInitialFileName(currentEditingItem.getItemId() + ".yml");
+
+        File targetFile = fileChooser.showSaveDialog(stage);
+        if (targetFile == null) {
+            return;
+        }
+
+        Map<String, Object> itemDataToSave = collectItemDataFromControls();
+        String itemId = currentEditingItem.getItemId();
+
+        try {
+            if (!dataService.getLoadedFilesData().containsKey(targetFile)) {
+                if (targetFile.exists()) {
+                    dataService.loadSingleYmlFile(targetFile);
+                } else {
+                    dataService.getLoadedFilesData().put(targetFile, new LinkedHashMap<>());
+                }
+            }
+
+            Map<String, Map<String, Object>> targetFileData = dataService.getLoadedFilesData().get(targetFile);
+            targetFileData.put(itemId, itemDataToSave);
+
+            dataService.saveToFile(targetFile);
+
+            refreshTreeView();
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), String.format(getTranslation("dialog.success.save.as"), itemId, targetFile.getName()));
+
+        } catch (Exception e) {
+            showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.save.as"), e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
+    @FXML
+    private void handleExit() {
+        if (canClose()) {
+            Platform.exit();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> collectItemDataFromControls() {
+        Map<String, Object> itemData = new LinkedHashMap<>();
 
         for (Map.Entry<String, Node> entry : attributeControls.entrySet()) {
             String attrName = entry.getKey();
             Node control = entry.getValue();
 
-            if (attrName.equals("enchants_table")) continue;
+            if (attrName.equals("enchants_table") || attrName.equals("ability_table")) continue;
 
             if (control instanceof CheckBox) {
-                if (((CheckBox) control).isSelected()) newItemData.put(attrName, true);
+                if (((CheckBox) control).isSelected()) itemData.put(attrName, true);
             } else if (control instanceof TextField) {
                 String text = ((TextField) control).getText();
-                if (text != null && !text.trim().isEmpty()) newItemData.put(attrName, smartConvert(text));
+                if (text != null && !text.trim().isEmpty()) itemData.put(attrName, Utils.smartConvert(text));
             } else if (control instanceof ComboBox) {
                 Object value = ((ComboBox<?>) control).getValue();
-                if (value != null && !value.toString().trim().isEmpty()) newItemData.put(attrName, value.toString());
+                if (value != null && !value.toString().trim().isEmpty()) itemData.put(attrName, value.toString());
+            } else if (control instanceof Spinner) {
+                Object value = ((Spinner<?>) control).getValue();
+                if (value != null && ((Number) value).doubleValue() != 0.0) {
+                    itemData.put(attrName, value);
+                }
             } else if (control instanceof TextArea) {
                 String text = ((TextArea) control).getText();
                 if (text != null && !text.trim().isEmpty()) {
                     try {
-                        newItemData.put(attrName, yaml.load(text));
+                        Object loaded = dataService.getYaml().load(text);
+                        if(loaded != null) {
+                            itemData.put(attrName, loaded);
+                        }
                     } catch (Exception e) {
-                        showAlert("YAML语法错误", "属性 '" + attrName + "' 中的YAML格式不正确，已忽略。");
+                        showAlert(Alert.AlertType.WARNING, getTranslation("dialog.error.yaml.syntax"), String.format(getTranslation("dialog.error.yaml.syntax.message"), attrName));
                     }
                 }
             }
         }
 
         TableView<EnchantmentEntry> enchantmentsTable = (TableView<EnchantmentEntry>) attributeControls.get("enchants_table");
-        if (!enchantmentsTable.getItems().isEmpty()) {
+        if (enchantmentsTable != null && !enchantmentsTable.getItems().isEmpty()) {
             Map<String, Integer> enchantsMap = new LinkedHashMap<>();
             for (EnchantmentEntry ench : enchantmentsTable.getItems()) {
                 enchantsMap.put(ench.getName(), ench.getLevel());
             }
-            newItemData.put("enchants", enchantsMap);
+            itemData.put("enchants", enchantsMap);
         }
 
-        Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(currentEditingItem.getParentFile());
-        if (itemsInFile != null) {
-            itemsInFile.put(currentEditingItem.getItemId(), newItemData);
-            saveAllToFile(currentEditingItem.getParentFile());
-            setUnsavedChanges(false);
-            showAlert("成功", "物品 '" + currentEditingItem.getItemId() + "' 已成功保存！");
-        }
-    }
-
-    private void saveAllToFile(File fileToSave) {
-        Map<String, Map<String, Object>> data = loadedFilesData.get(fileToSave);
-        if (data == null) return;
-        try (FileWriter writer = new FileWriter(fileToSave)) {
-            if (!data.isEmpty()) {
-                yaml.dump(data, writer);
-            } else {
-                writer.write("");
+        if (permEffectsTable != null && !permEffectsTable.getItems().isEmpty()) {
+            Map<String, Integer> permEffectsMap = new LinkedHashMap<>();
+            for (PotionEffectEntry effect : permEffectsTable.getItems()) {
+                permEffectsMap.put(effect.getName(), effect.getLevel());
             }
-        } catch (IOException e) {
-            showAlert("保存文件错误", "无法保存文件 " + fileToSave.getName() + ": " + e.getMessage());
+            itemData.put("perm-effects", permEffectsMap);
         }
+
+        TableView<AbilityEntry> abilityTable = (TableView<AbilityEntry>) attributeControls.get("ability_table");
+        if (abilityTable != null && !abilityTable.getItems().isEmpty()) {
+            Map<String, Object> abilitiesMap = new LinkedHashMap<>();
+            for (AbilityEntry ability : abilityTable.getItems()) {
+                abilitiesMap.put(ability.getId(), ability.getModifiers());
+            }
+            itemData.put("ability", abilitiesMap);
+        }
+
+        return itemData;
     }
     //</editor-fold>
 
@@ -631,16 +719,16 @@ public class EditorController {
         }
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("未保存的更改");
-        alert.setHeaderText("您有未保存的更改。您想在关闭前保存吗？");
-        alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO, ButtonType.CANCEL);
+        alert.setTitle(getTranslation("dialog.warn.unsaved.title"));
+        alert.setHeaderText(getTranslation("dialog.warn.unsaved.header"));
+        alert.getButtonTypes().setAll(new ButtonType(getTranslation("yes"), ButtonBar.ButtonData.YES), new ButtonType(getTranslation("no"), ButtonBar.ButtonData.NO), new ButtonType(getTranslation("cancel"), ButtonBar.ButtonData.CANCEL_CLOSE));
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent()) {
-            if (result.get() == ButtonType.YES) {
+            if (result.get().getButtonData() == ButtonBar.ButtonData.YES) {
                 saveChanges();
                 return !hasUnsavedChanges;
-            } else return result.get() != ButtonType.CANCEL;
+            } else return result.get().getButtonData() != ButtonBar.ButtonData.CANCEL_CLOSE;
         }
         return false;
     }
@@ -650,26 +738,26 @@ public class EditorController {
     @FXML
     private void handleNewItem() {
         if (currentSelectedYmlFile == null) {
-            showAlert("警告", "请先在左侧选择一个 .yml 文件。");
+            showAlert(Alert.AlertType.WARNING, getTranslation("warning"), getTranslation("dialog.warn.no.file.selected"));
             return;
         }
 
-        TextInputDialog dialog = new TextInputDialog("NEW_ITEM_ID");
-        dialog.setTitle("新建物品");
-        dialog.setHeaderText("请输入新物品的ID (例如: MY_AWESOME_SWORD)");
-        dialog.setContentText("物品ID:");
+        TextInputDialog dialog = new TextInputDialog(getTranslation("dialog.new.item.default"));
+        dialog.setTitle(getTranslation("dialog.new.item.title"));
+        dialog.setHeaderText(getTranslation("dialog.new.item.header"));
+        dialog.setContentText(getTranslation("dialog.new.item.content"));
 
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(newId -> {
             newId = newId.trim().toUpperCase().replace(" ", "_");
             if (newId.isEmpty()) {
-                showAlert("警告", "物品ID不能为空。");
+                showAlert(Alert.AlertType.WARNING, getTranslation("warning"), getTranslation("dialog.warn.id.empty"));
                 return;
             }
 
-            Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(currentSelectedYmlFile);
+            Map<String, Map<String, Object>> itemsInFile = dataService.getLoadedFilesData().get(currentSelectedYmlFile);
             if (itemsInFile != null && itemsInFile.containsKey(newId)) {
-                showAlert("警告", "物品ID '" + newId + "' 已存在。");
+                showAlert(Alert.AlertType.WARNING, getTranslation("warning"), String.format(getTranslation("dialog.warn.id.exists"), newId));
                 return;
             }
 
@@ -679,22 +767,24 @@ public class EditorController {
 
             if (itemsInFile == null) {
                 itemsInFile = new LinkedHashMap<>();
-                loadedFilesData.put(currentSelectedYmlFile, itemsInFile);
+                dataService.getLoadedFilesData().put(currentSelectedYmlFile, itemsInFile);
             }
             itemsInFile.put(newId, newItemData);
-
-            TreeItem<Object> fileTreeItem = findTreeItem(fileTreeView.getRoot(), currentSelectedYmlFile);
-            if (fileTreeItem != null) {
-                MMOItemEntry newEntry = new MMOItemEntry(newId, currentSelectedYmlFile);
-                TreeItem<Object> newTreeItem = new TreeItem<>(newEntry);
-                fileTreeItem.getChildren().add(newTreeItem);
-                fileTreeItem.getChildren().sort(Comparator.comparing(t -> t.getValue().toString()));
-                fileTreeView.getSelectionModel().select(newTreeItem);
+            try {
+                dataService.saveToFile(currentSelectedYmlFile);
+            } catch (DataAccessException e) {
+                showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.save"), String.format(getTranslation("dialog.error.save.item"), e.getMessage()));
+                e.printStackTrace();
+                return; // Don't continue if save failed
             }
 
-            saveAllToFile(currentSelectedYmlFile);
+            MMOItemEntry newEntry = new MMOItemEntry(newId, currentSelectedYmlFile);
+            currentEditingItem = newEntry;
+            refreshTreeView(); 
+            loadItemContent(currentEditingItem);
+
             setUnsavedChanges(false);
-            showAlert("成功", "物品 '" + newId + "' 已创建并保存。");
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), String.format(getTranslation("dialog.success.new.item"), newId));
         });
     }
 
@@ -703,43 +793,46 @@ public class EditorController {
         if (currentEditingItem == null) return;
 
         TextInputDialog dialog = new TextInputDialog(currentEditingItem.getItemId() + "_COPY");
-        dialog.setTitle("复制物品");
-        dialog.setHeaderText("请输入新物品的ID");
-        dialog.setContentText("新物品ID:");
+        dialog.setTitle(getTranslation("dialog.duplicate.item.title"));
+        dialog.setHeaderText(getTranslation("dialog.duplicate.item.header"));
+        dialog.setContentText(getTranslation("dialog.duplicate.item.content"));
 
         Optional<String> result = dialog.showAndWait();
         result.ifPresent(newId -> {
             newId = newId.trim().toUpperCase().replace(" ", "_");
             if (newId.isEmpty()) {
-                showAlert("警告", "物品ID不能为空。");
+                showAlert(Alert.AlertType.WARNING, getTranslation("warning"), getTranslation("dialog.warn.id.empty"));
                 return;
             }
 
             File parentFile = currentEditingItem.getParentFile();
-            Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(parentFile);
+            Map<String, Map<String, Object>> itemsInFile = dataService.getLoadedFilesData().get(parentFile);
 
             if (itemsInFile != null && itemsInFile.containsKey(newId)) {
-                showAlert("警告", "物品ID '" + newId + "' 已存在。");
+                showAlert(Alert.AlertType.WARNING, getTranslation("warning"), String.format(getTranslation("dialog.warn.id.exists"), newId));
                 return;
             }
 
             Map<String, Object> originalItemData = itemsInFile.get(currentEditingItem.getItemId());
-            Map<String, Object> duplicatedItemData = deepCopyMap(originalItemData);
+            Map<String, Object> duplicatedItemData = dataService.deepCopyMap(originalItemData);
 
             itemsInFile.put(newId, duplicatedItemData);
 
-            TreeItem<Object> fileTreeItem = findTreeItem(fileTreeView.getRoot(), parentFile);
-            if (fileTreeItem != null) {
-                MMOItemEntry newEntry = new MMOItemEntry(newId, parentFile);
-                TreeItem<Object> newTreeItem = new TreeItem<>(newEntry);
-                fileTreeItem.getChildren().add(newTreeItem);
-                fileTreeItem.getChildren().sort(Comparator.comparing(t -> t.getValue().toString()));
-                fileTreeView.getSelectionModel().select(newTreeItem);
+            try {
+                dataService.saveToFile(parentFile);
+            } catch (DataAccessException e) {
+                showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.save"), String.format(getTranslation("dialog.error.save.item"), e.getMessage()));
+                e.printStackTrace();
+                return; // Don't continue if save failed
             }
 
-            saveAllToFile(parentFile);
+            MMOItemEntry newEntry = new MMOItemEntry(newId, parentFile);
+            currentEditingItem = newEntry;
+            refreshTreeView();
+            loadItemContent(currentEditingItem);
+
             setUnsavedChanges(false);
-            showAlert("成功", "物品已成功复制为 '" + newId + "'。");
+            showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), String.format(getTranslation("dialog.success.duplicate.item"), newId));
         });
     }
 
@@ -748,29 +841,30 @@ public class EditorController {
         if (currentEditingItem == null) return;
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("确认删除");
-        alert.setHeaderText("您确定要删除物品 '" + currentEditingItem.getItemId() + "' 吗？");
-        alert.setContentText("此操作不可逆！");
+        alert.setTitle(getTranslation("dialog.delete.item.title"));
+        alert.setHeaderText(String.format(getTranslation("dialog.delete.item.header"), currentEditingItem.getItemId()));
+        alert.setContentText(getTranslation("dialog.delete.item.content"));
 
         Optional<ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == ButtonType.OK) {
             File parentFile = currentEditingItem.getParentFile();
             String itemIdToRemove = currentEditingItem.getItemId();
 
-            Map<String, Map<String, Object>> itemsInFile = loadedFilesData.get(parentFile);
+            Map<String, Map<String, Object>> itemsInFile = dataService.getLoadedFilesData().get(parentFile);
             if (itemsInFile != null) {
                 itemsInFile.remove(itemIdToRemove);
 
-                TreeItem<Object> fileTreeItem = findTreeItem(fileTreeView.getRoot(), parentFile);
-                if (fileTreeItem != null) {
-                    fileTreeItem.getChildren().removeIf(item -> item.getValue().equals(currentEditingItem));
-                }
-
                 clearEditor();
                 showEditor(false);
-                saveAllToFile(parentFile);
-                setUnsavedChanges(false);
-                showAlert("成功", "物品 '" + itemIdToRemove + "' 已删除。");
+                try {
+                    dataService.saveToFile(parentFile);
+                    setUnsavedChanges(false);
+                    showAlert(Alert.AlertType.INFORMATION, getTranslation("success"), String.format(getTranslation("dialog.success.delete.item"), itemIdToRemove));
+                    refreshTreeView();
+                } catch (DataAccessException e) {
+                    showAlert(Alert.AlertType.ERROR, getTranslation("dialog.error.delete"), String.format(getTranslation("dialog.error.delete.message"), e.getMessage()));
+                    e.printStackTrace();
+                }
             }
         }
     }
@@ -778,11 +872,28 @@ public class EditorController {
 
     //<editor-fold desc="Utility Methods">
     private String getTranslation(String key) {
-        return TRANSLATIONS.getOrDefault(key, key);
+        try {
+            return translations.getString(key);
+        } catch (MissingResourceException e) {
+            // Fallback for missing keys
+            System.err.println("Missing translation key: " + key);
+            return "!" + key + "!";
+        }
     }
 
     private TreeItem<Object> findTreeItem(TreeItem<Object> root, Object value) {
-        if (root.getValue().equals(value)) return root;
+        if (root == null || root.getValue() == null || value == null) return null;
+
+        if (root.getValue() instanceof MMOItemEntry && value instanceof MMOItemEntry) {
+            MMOItemEntry rootItem = (MMOItemEntry) root.getValue();
+            MMOItemEntry valueItem = (MMOItemEntry) value;
+            if (rootItem.getItemId().equals(valueItem.getItemId()) && rootItem.getParentFile().equals(valueItem.getParentFile())) {
+                return root;
+            }
+        } else if (root.getValue().equals(value)) {
+            return root;
+        }
+
         for (TreeItem<Object> child : root.getChildren()) {
             TreeItem<Object> found = findTreeItem(child, value);
             if (found != null) return found;
@@ -790,49 +901,65 @@ public class EditorController {
         return null;
     }
 
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+    private void showAlert(Alert.AlertType alertType, String title, String message) {
+        Alert alert = new Alert(alertType);
         alert.setTitle(title);
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.showAndWait();
     }
     
-    private Object smartConvert(String text) {
-        if (text.equalsIgnoreCase("true")) return true;
-        if (text.equalsIgnoreCase("false")) return false;
-        try {
-            return Integer.parseInt(text);
-        } catch (NumberFormatException e) { /* ignore */ }
-        try {
-            return Double.parseDouble(text);
-        } catch (NumberFormatException e) { /* ignore */ }
-        return text;
+    private void filterTreeView(String filter) {
+        if (originalRoot == null) {
+            return;
+        }
+
+        if (filter == null || filter.trim().isEmpty()) {
+            fileTreeView.setRoot(originalRoot);
+            return;
+        }
+
+        String lowerCaseFilter = filter.toLowerCase().trim();
+
+        TreeItem<Object> filteredRoot = new TreeItem<>(originalRoot.getValue());
+        filteredRoot.setExpanded(true);
+
+        for (TreeItem<Object> fileItem : originalRoot.getChildren()) {
+            TreeItem<Object> newFileItem = new TreeItem<>(fileItem.getValue());
+
+            for (TreeItem<Object> itemEntryItem : fileItem.getChildren()) {
+                if (itemEntryItem.getValue() instanceof MMOItemEntry) {
+                    MMOItemEntry mmoItem = (MMOItemEntry) itemEntryItem.getValue();
+                    if (mmoItem.getItemId().toLowerCase().contains(lowerCaseFilter)) {
+                        newFileItem.getChildren().add(new TreeItem<>(mmoItem));
+                    }
+                }
+            }
+
+            if (!newFileItem.getChildren().isEmpty()) {
+                newFileItem.setExpanded(true);
+                filteredRoot.getChildren().add(newFileItem);
+            }
+        }
+        fileTreeView.setRoot(filteredRoot);
     }
 
-    private Map<String, Object> deepCopyMap(Map<String, Object> original) {
-        Map<String, Object> copy = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : original.entrySet()) {
-            copy.put(entry.getKey(), deepCopyValue(entry.getValue()));
-        }
-        return copy;
-    }
+    private void refreshTreeView() {
+        if (selectedMMOItemsFolder == null) return;
 
-    private List<Object> deepCopyList(List<Object> original) {
-        List<Object> copy = new ArrayList<>();
-        for (Object item : original) {
-            copy.add(deepCopyValue(item));
+        TreeItem<Object> newRoot = new TreeItem<>(selectedMMOItemsFolder);
+        newRoot.setExpanded(true);
+        TreeViewBuilder.populateTreeView(newRoot, selectedMMOItemsFolder, dataService);
+        this.originalRoot = newRoot;
+
+        filterTreeView(searchField.getText());
+
+        if (currentEditingItem != null) {
+            TreeItem<Object> itemToSelect = findTreeItem(fileTreeView.getRoot(), currentEditingItem);
+            if (itemToSelect != null) {
+                fileTreeView.getSelectionModel().select(itemToSelect);
+            }
         }
-        return copy;
-    }
-    
-    private Object deepCopyValue(Object value) {
-        if (value instanceof Map) {
-            return deepCopyMap((Map<String, Object>) value);
-        } else if (value instanceof List) {
-            return deepCopyList((List<Object>) value);
-        }
-        return value;
     }
     //</editor-fold>
 }

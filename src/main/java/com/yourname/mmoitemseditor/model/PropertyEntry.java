@@ -3,6 +3,9 @@ package com.yourname.mmoitemseditor.model;
 import javafx.beans.property.SimpleObjectProperty;
 import javafx.beans.property.SimpleStringProperty;
 
+/**
+ * 表示TableView中的一行，即一个物品属性（键值对）。
+ */
 public class PropertyEntry {
     private final SimpleStringProperty key;
     private final SimpleObjectProperty<Object> value;
